@@ -94,10 +94,14 @@ public class MobileDeviceManager extends DatacenterBroker {
 		Task task = (Task) ev.getData();
 
 		Location currentLocation = SimManager.getInstance().getMobilityModel().getLocation(task.getMobileDeviceId(),CloudSim.clock());
-		//Qian added for sensor generated tasks getting download destination. 
+		//SimLogger.printLine("-");
+		//Qian added for sensor generated tasks getting download destination. Uncomment code on line 491 (Producer/Consumer)
 		if (task.sens) {
-			//Location currentLocation = SimManager.getInstance().getMobilityModel().getLocation(task.getDesMobileId(),CloudSim.clock());
+			//SimLogger.printLine("HMMM? X: " + currentLocation.getXPos() + " Y: " + currentLocation.getYPos() + "Prod: " + task.getMobileDeviceId() + " Cons: " + task.getDesMobileDeviceId());
+			currentLocation = SimManager.getInstance().getMobilityModel().getLocation(task.getDesMobileDeviceId(),CloudSim.clock());
+			//SimLogger.printLine("GOOD? X: " + currentLocation.getXPos() + " Y: " + currentLocation.getYPos() + "Prod: " + task.getMobileDeviceId() + " Cons: " + task.getDesMobileDeviceId());
 		}
+		
 		
 		//if(task.getSubmittedLocation().equals(currentLocation))
 		//{
@@ -105,12 +109,13 @@ public class MobileDeviceManager extends DatacenterBroker {
 			SimSettings.CLOUD_TRANSFER isCloud = (task.getAssociatedHostId() == 0)?SimSettings.CLOUD_TRANSFER.CLOUD_DOWNLOAD:SimSettings.CLOUD_TRANSFER.IGNORE;
 			double WlanDelay = networkModel.getDownloadDelay(task.getAssociatedHostId() * -1, task.getMobileDeviceId(), task.getCloudletOutputSize(), false, task.wifi, isCloud);
 			SimLogger.getInstance().addHops(task.getCloudletId(), ((ESBModel) networkModel).getHops(task, task.getAssociatedHostId()));
+			SimLogger.getInstance().addHopsBack(task.getCloudletId(), ((ESBModel) networkModel).getHopsBack(task, task.getAssociatedHostId()));
 			/*if (((ESBModel) networkModel).getHops(task, task.getAssociatedHostId()) == 0) {
 				((ESBModel) networkModel).getHops(task, task.getAssociatedHostId());
 				networkModel.getDownloadDelay(task.getAssociatedHostId() * -1, task.getMobileDeviceId(), task.getCloudletOutputSize(), false, task.wifi);
 			}*/
 			
-			if (SimSettings.getInstance().traceEnalbe()) {
+			if (SimSettings.getInstance().traceEnable()) {
 				SimLogger.printLine("WlanDelay: "+ WlanDelay+ "  taskmaxDelay: "+task.getMaxDelay());
 				if (WlanDelay < 0)
 					SimLogger.printLine("FAILED DUE TO BANDWIDTH during Download in processCloudletReturn");
@@ -286,8 +291,17 @@ public class MobileDeviceManager extends DatacenterBroker {
 				Location devLoc = task.getSubmittedLocation();
 				Location hostLoc = SimManager.getInstance().getLocalServerManager().findHostById(task.getAssociatedHostId()).getLocation();
 				double hostDistance = DataInterpreter.measure(hostLoc.getYPos(), hostLoc.getXPos(), devLoc.getYPos(), devLoc.getXPos());
+				
+				double consumerDistance = hostDistance;
+				if (task.sens) {
+					int desID = task.getDesMobileDeviceId();
+					GPSVectorMobility mb = ((GPSVectorMobility)SimManager.getInstance().getMobilityModel());
+					Location consumerLoc = mb.getLocation(desID, task.getFinishTime());
+					consumerDistance = DataInterpreter.measure(hostLoc.getYPos(), hostLoc.getXPos(), consumerLoc.getYPos(), consumerLoc.getXPos());
+				}
+				
 				SimLogger.getInstance().addHostDistanceLog(task.getCloudletId(), hostDistance);
-
+				SimLogger.getInstance().addUserDistanceLog(task.getCloudletId(), consumerDistance);
 				//Shaik added
 				double taskPerceivedDelay = SimLogger.getInstance().getTaskPerceivedDelay(task.getCloudletId());
 				//System.out.println("taskPerceivedDelay: after execution: "+taskPerceivedDelay);
@@ -295,7 +309,7 @@ public class MobileDeviceManager extends DatacenterBroker {
 					SimLogger.getInstance().taskRejected(task.getCloudletId(), CloudSim.clock(), SimLogger.TASK_STATUS.REJECTED_DUE_TO_UNACCEPTABLE_LATENCY ); // Shaik added
 					//System.out.println("submitTask: Task: "+task.getCloudletId()+"  Assigned Host: "+task.getAssociatedHostId()+" - task rejected due to unacceptable latency.");
 					
-					if (SimSettings.getInstance().traceEnalbe()) {
+					if (SimSettings.getInstance().traceEnable()) {
 						SimLogger.printLine("submitTask: Task: "+task.getCloudletId()+"  Assigned Host: "+task.getAssociatedHostId()+" - task rejected due to unacceptable latency.");
 					}
 				}
@@ -339,7 +353,7 @@ public class MobileDeviceManager extends DatacenterBroker {
 					selectedVM.getId(),
 					selectedVM.getVmType().ordinal());
 
-			if (SimSettings.getInstance().traceEnalbe()) {
+			if (SimSettings.getInstance().traceEnable()) {
 				SimLogger.printLine("submitTaskToEdgeDevice: Task: "+task.getCloudletId()+"  Assigned Host: "+task.getAssociatedHostId()+"  Selected VM: "+ selectedVM.getId());
 			}
 
@@ -348,7 +362,7 @@ public class MobileDeviceManager extends DatacenterBroker {
 			//SimLogger.printLine("Task #" + task.getCloudletId() + " cannot assign to any VM");
 			SimLogger.getInstance().taskRejected(task.getCloudletId(), CloudSim.clock(),getMobileDevices().get(task.getMobileDeviceId()).getAssignHostStatus());
 
-			if (SimSettings.getInstance().traceEnalbe()) {
+			if (SimSettings.getInstance().traceEnable()) {
 				SimLogger.printLine("submitTaskToEdgeDevice: Task: "+task.getCloudletId()+"  Assigned Host: "+task.getAssociatedHostId()+" - task rejected due to host unavailability");
 			}
 			
@@ -386,7 +400,7 @@ public class MobileDeviceManager extends DatacenterBroker {
 			//SimLogger.getInstance().rejectedDueToVMCapacity(task.getCloudletId(), CloudSim.clock()); // Shaik commented
 			SimLogger.getInstance().taskRejected(task.getCloudletId(), CloudSim.clock(),getMobileDevices().get(task.getMobileDeviceId()).getAssignHostStatus()); // Shaik added
 			// Shaik added	
-			if (SimSettings.getInstance().traceEnalbe()) {
+			if (SimSettings.getInstance().traceEnable()) {
 				SimLogger.printLine("submitTask: Task: "+task.getCloudletId()+"  Assigned Host: "+task.getAssociatedHostId()+" - task rejected due to host unavailability");
 			}
 
@@ -437,7 +451,7 @@ public class MobileDeviceManager extends DatacenterBroker {
 			SimSettings.CLOUD_TRANSFER isCloud = (nextHopId== 0)?SimSettings.CLOUD_TRANSFER.CLOUD_UPLOAD:SimSettings.CLOUD_TRANSFER.IGNORE;
 			double WlanDelay = networkModel.getUploadDelay(task.getMobileDeviceId(), nextHopId * -1, task.getCloudletFileSize(), task.wifi, false, isCloud);
 
-			if (SimSettings.getInstance().traceEnalbe()) {
+			if (SimSettings.getInstance().traceEnable()) {
 				SimLogger.printLine("WlanDelay: "+ WlanDelay+ "  taskmaxDelay: "+task.getMaxDelay());
 				if (WlanDelay < 0)
 					SimLogger.printLine("submitTask: FAILED DUE TO BANDWIDTH during Upload in submitTask");
@@ -468,6 +482,7 @@ public class MobileDeviceManager extends DatacenterBroker {
 	/**
 	 * 
 	 * @param edgeTask
+	 * 
 	 * @return
 	 */
 	public Task createTask(EdgeTask edgeTask){
@@ -477,7 +492,7 @@ public class MobileDeviceManager extends DatacenterBroker {
 		Task task = new Task(edgeTask.mobileDeviceId, ++taskIdCounter,
 				edgeTask.length, edgeTask.pesNumber,
 				edgeTask.inputFileSize, edgeTask.outputFileSize,
-				utilizationModelCPU, utilizationModel, utilizationModel, edgeTask.wifi, edgeTask.sens, edgeTask.act);
+				utilizationModelCPU, utilizationModel, utilizationModel, edgeTask.wifi, edgeTask.sensor, edgeTask.actuator);
 		
 		//set the owner of this task
 		task.setUserId(this.getId());
@@ -486,9 +501,10 @@ public class MobileDeviceManager extends DatacenterBroker {
 		
 		
 		//Qian add for sensor generated task getting destination uncomment the code inside if statement.
-		//Also please uncomment the line 81.
-		if (edgeTask.sens) {
-			//task.setDesMobileDeviceId(edgeTask.desMobileDeviceId);
+		//Also please uncomment the line 81. And IdleActiveLoadGenerator.java line 121
+		if (edgeTask.sensor) {
+			//SimLogger.printLine("++++++");
+			task.setDesMobileDeviceId(edgeTask.desMobileDeviceId);
 		}
 		return task;
 	}

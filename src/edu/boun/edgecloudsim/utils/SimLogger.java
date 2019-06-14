@@ -28,6 +28,9 @@ import java.util.LinkedList;
 import java.util.Map;
 import java.util.stream.DoubleStream;
 import java.util.stream.IntStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.PrintStream;
 
 import org.cloudbus.cloudsim.core.CloudSim;
 
@@ -55,8 +58,8 @@ public class SimLogger {
 
 	private static boolean fileLogEnabled;
 	private static boolean printLogEnabled;
-	private String filePrefix;
-	private String outputFolder;
+	private static String filePrefix;
+	private static String outputFolder;
 	private Map<Integer, LogItem> taskMap;
 	private LinkedList<VmLoadLogItem> vmLoadList;
 	private LinkedList<FNMipsUtilLogItem> fnMipsUtilList; // shaik added
@@ -64,6 +67,9 @@ public class SimLogger {
 	private File centerLogFile;
 	PrintWriter centerFileW;
 	private ArrayList<Integer> utlizationArray;
+	private static File textFile;
+	private static FileOutputStream fos;
+	private static PrintStream ps;
 	
 	private static SimLogger singleton = new SimLogger();
 	
@@ -92,10 +98,12 @@ public class SimLogger {
 
 	
 	/**
+	 * @throws IOException 
 	 * 
 	 */
-	public static void enablePrintLog() {
+	public static void enablePrintLog() throws IOException {
 		printLogEnabled = true;
+		
 	}
 
 
@@ -126,6 +134,12 @@ public class SimLogger {
 		bw.write(line);
 		bw.newLine();
 	}
+	
+	public File getConsoleTxtFile() {
+		return this.textFile;
+	}
+	
+	
 
 	
 	/**
@@ -135,6 +149,7 @@ public class SimLogger {
 	public static void printLine(String msg) {
 		if (printLogEnabled)
 			System.out.println(msg);
+			ps.println(msg);
 	}
 
 	
@@ -145,16 +160,26 @@ public class SimLogger {
 	public static void print(String msg) {
 		if (printLogEnabled)
 			System.out.print(msg);
+			ps.print(msg);
 	}
-
+	
+	public static void fileInitialize(String outputFolder) throws IOException {
+		textFile = new File(outputFolder, Long.toString(System.currentTimeMillis()) + "_console.txt");
+		//textFile = new File("_consoleOut" + Long.toString(System.currentTimeMillis()) + ".txt");
+		textFile.createNewFile();
+		fos = new FileOutputStream(textFile);
+		ps = new PrintStream(fos);
+	}
 	
 	/**
 	 * @param outFolder
 	 * @param fileName
+	 * @throws IOException 
 	 */
-	public void simStarted(String outFolder, String fileName) {
+	public void simStarted(String outFolder, String fileName) throws IOException {
 		filePrefix = fileName;
 		outputFolder = outFolder;
+		
 		taskMap = new HashMap<Integer, LogItem>();
 		vmLoadList = new LinkedList<VmLoadLogItem>();
 		fnMipsUtilList = new LinkedList<FNMipsUtilLogItem>(); // shaik added
@@ -207,20 +232,21 @@ public class SimLogger {
 	 * @param taskStartTime
 	 * @param taskId
 	 * @param taskType
-	 * @param taskLenght
+	 * @param taskLength
 	 * @param taskInputType
 	 * @param taskOutputSize
 	 */
-	public void addLog(double taskStartTime, int taskId, int taskType, int taskLenght, int taskInputType,
+	public void addLog(double taskStartTime, int taskId, int taskType, int taskLength, int taskInputType,
 			int taskOutputSize) {
 		// printLine(taskId+"->"+taskStartTime);
-		taskMap.put(taskId, new LogItem(taskStartTime, taskType, taskLenght, taskInputType, taskOutputSize));
+		taskMap.put(taskId, new LogItem(taskStartTime, taskType, taskLength, taskInputType, taskOutputSize));
 	}
 
 	
 	/**
 	 * 
 	 * @param taskId
+	 * 
 	 * @param taskUploadTime
 	 */
 	public void uploadStarted(int taskId, double taskUploadTime) {
@@ -344,6 +370,10 @@ public class SimLogger {
 		taskMap.get(taskId).setDistance(dist);
 	}
 	
+	public void addUserDistanceLog(int taskId, double dist) {
+		taskMap.get(taskId).setDistanceToUser(dist);
+	}
+	
 	
 	/**
 	 * 
@@ -352,6 +382,11 @@ public class SimLogger {
 	 */
 	public void addHops(int taskId, int hops) {
 		taskMap.get(taskId).setHops(hops);
+	}
+	
+	public void addHopsBack(int taskId, int hops) {
+		//System.out.println(hops);
+		taskMap.get(taskId).setHopsToUser(hops);
 	}
 	
 	//	
@@ -454,7 +489,9 @@ public class SimLogger {
 		int[] rejectedTaskDueToUnacceptableLatency = new int[numOfAppTypes+1];
 		
 		double[] totalDist = new double[numOfAppTypes + 1];
+		double[] totalUserDist = new double[numOfAppTypes +1];
 		int[] totalHops = new int[numOfAppTypes + 1];
+		int[] totalHopsBack = new int[numOfAppTypes + 1];
 		int[] numTasksPerAppType = new int[numOfAppTypes + 1];
 
 		//Modify the following array lengths depending on number of layers in test fog environment. Currently, it is 7 layered.
@@ -593,11 +630,14 @@ public class SimLogger {
 				
 				// Get info to calculate 'Average distance to host'
 				totalDist[value.getTaskType()] += value.getHostDist();
+				totalUserDist[value.getTaskType()] += value.getDistanceToUser();
 				distBW.write(value.getHostDist() + ",");
 				
 				// Get info to calculate 'Average number of hops to host'
 				totalHops[value.getTaskType()] += value.getHops();
+				totalHopsBack[value.getTaskType()] += value.getHopsToUser();
 				hopBW.write(value.getHops() + ",");
+				
 				
 				cost[value.getTaskType()] += value.getCost();
 				serviceTime[value.getTaskType()] += value.getServiceTime();
@@ -728,7 +768,9 @@ public class SimLogger {
 		rejectedTaskDueToUnacceptableLatency[numOfAppTypes] = IntStream.of(rejectedTaskDueToUnacceptableLatency).sum();
 		
 		totalDist[numOfAppTypes] = DoubleStream.of(totalDist).sum();
+		totalUserDist[numOfAppTypes] = DoubleStream.of(totalUserDist).sum();
 		totalHops[numOfAppTypes] = IntStream.of(totalHops).sum();
+		totalHopsBack[numOfAppTypes] = IntStream.of(totalHopsBack).sum();
 		numTasksPerAppType[numOfAppTypes] = IntStream.of(numTasksPerAppType).sum(); // Shaik modified
 		
 		// calculate server load - This value may not be valid for HAFA test environment. May ignore. 
@@ -1093,9 +1135,15 @@ public class SimLogger {
 		double averageDistance = (completedTask[numOfAppTypes] == 0) ? 0.0 : (totalDist[numOfAppTypes] / (double) completedTask[numOfAppTypes]);
 		printLine("Average Distance from task to host: " + String.format("%.2f", averageDistance));
 
+		double averageUserDistance = (completedTask[numOfAppTypes] == 0) ? 0.0 : (totalUserDist[numOfAppTypes] / (double) completedTask[numOfAppTypes]);
+		printLine("Average Distance from host to user: " + String.format("%.2f", averageUserDistance));
+		
 		double averageHops = (completedTask[numOfAppTypes] == 0) ? 0.0 : (totalHops[numOfAppTypes] / (double) completedTask[numOfAppTypes]);
 		printLine("Average number of hops from task to host: " + String.format("%.2f", averageHops));
-
+		
+		double averageHopsBack = (completedTask[numOfAppTypes] == 0) ? 0.0 : (totalHopsBack[numOfAppTypes] / (double) completedTask[numOfAppTypes]);
+		printLine("Average number of hops from host to user: " + String.format("%.2f", averageHopsBack));
+		
 		double averageNumHosts = SimManager.getInstance().getEdgeOrchestrator().getAvgNumProspectiveHosts();
 		printLine("Average number of prospective hosts considered for placement: " + String.format("%.2f", averageNumHosts));
 
@@ -1662,16 +1710,16 @@ class LogItem {
 	/**
 	 * @return the taskLenght
 	 */
-	public int getTaskLenght() {
-		return taskLenght;
+	public int getTaskLength() {
+		return taskLength;
 	}
 
 	
 	/**
-	 * @param taskLenght the taskLenght to set
+	 * @param taskLength the taskLenght to set
 	 */
-	public void setTaskLenght(int taskLenght) {
-		this.taskLenght = taskLenght;
+	public void setTaskLength(int taskLength) {
+		this.taskLength = taskLength;
 	}
 
 	
@@ -1811,6 +1859,10 @@ class LogItem {
 	}
 
 	
+	public double getDistanceToUser() {
+		return distanceToUser;
+	}
+	
 	/**
 	 * @param distanceToHost the distanceToHost to set
 	 */
@@ -1818,6 +1870,9 @@ class LogItem {
 		this.distanceToHost = distanceToHost;
 	}
 
+	public void setDistanceToUser(double distanceToUser) {
+		this.distanceToUser = distanceToUser;
+	}
 	
 	/**
 	 * @param status the status to set
@@ -1864,10 +1919,11 @@ class LogItem {
 	private int vmId;
 	private int vmType;
 	private int taskType;
-	private int taskLenght;
+	private int taskLength;
 	private int taskInputType;
 	private int taskOutputSize;
 	private int numberOfHops;
+	private int hopsToUser;
 	private double taskStartTime;
 	private double taskEndTime;
 	private double networkDelay;
@@ -1876,7 +1932,7 @@ class LogItem {
 	private boolean isInWarmUpPeriod;
 	private double taskCost = 0;
 	private double distanceToHost;
-	
+	private double distanceToUser;
 	
 	/**
 	 * 
@@ -1889,7 +1945,7 @@ class LogItem {
 	LogItem(double _taskStartTime, int _taskType, int _taskLenght, int _taskInputType, int _taskOutputSize) {
 		taskStartTime = _taskStartTime;
 		taskType = _taskType;
-		taskLenght = _taskLenght;
+		taskLength = _taskLenght;
 		taskInputType = _taskInputType;
 		taskOutputSize = _taskOutputSize;
 		status = SimLogger.TASK_STATUS.CREATED;
@@ -2095,7 +2151,7 @@ class LogItem {
 	public String toString(int taskId) {
 		String result = taskId + SimSettings.DELIMITER + datacenterId + SimSettings.DELIMITER + hostId
 				+ SimSettings.DELIMITER + vmId + SimSettings.DELIMITER + vmType + SimSettings.DELIMITER + taskType
-				+ SimSettings.DELIMITER + taskLenght + SimSettings.DELIMITER + taskInputType + SimSettings.DELIMITER
+				+ SimSettings.DELIMITER + taskLength + SimSettings.DELIMITER + taskInputType + SimSettings.DELIMITER
 				+ taskOutputSize + SimSettings.DELIMITER + taskStartTime + SimSettings.DELIMITER + taskEndTime
 				+ SimSettings.DELIMITER;
 
@@ -2147,6 +2203,9 @@ class LogItem {
 		return numberOfHops;
 	}
 	
+	public int getHopsToUser() {
+		return hopsToUser;
+	}
 	
 	/**
 	 * 
@@ -2154,6 +2213,10 @@ class LogItem {
 	 */
 	public void setHops(int in) {
 		numberOfHops = in;
+	}
+	
+	public void setHopsToUser(int in) {
+		hopsToUser = in;
 	}
 
 

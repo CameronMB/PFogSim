@@ -18,6 +18,7 @@ import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
+import java.util.Random;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
@@ -100,6 +101,8 @@ public class SimSettings {
 
     private int MIPS_FOR_CLOUD; //MIPS
     
+    private boolean MOVING_DEVICES; //Mobile devices should be moving?
+    
     //Qian selected nodes
     private String[] SELECTED_NODES;
     private int[] selectedHostIds; // Shaik added
@@ -135,6 +138,8 @@ public class SimSettings {
     private int MAX_LEVELS;
     private String inputType;
     private boolean mobileDevicesMoving;
+    
+    private int RANDOM_SEED;
     
     
     /**
@@ -183,6 +188,7 @@ public class SimSettings {
 			MIN_NUM_OF_MOBILE_DEVICES = Integer.parseInt(prop.getProperty("min_number_of_mobile_devices"));
 			MAX_NUM_OF_MOBILE_DEVICES = Integer.parseInt(prop.getProperty("max_number_of_mobile_devices"));
 			MOBILE_DEVICE_COUNTER_SIZE = Integer.parseInt(prop.getProperty("mobile_device_counter_size"));
+			MOVING_DEVICES = Boolean.parseBoolean(prop.getProperty("moving_devices"));
 			
 			WAN_PROPOGATION_DELAY = Double.parseDouble(prop.getProperty("wan_propogation_delay"));
 			LAN_INTERNAL_DELAY = Double.parseDouble(prop.getProperty("lan_internal_delay"));
@@ -217,6 +223,13 @@ public class SimSettings {
 			
 			SIMULATION_SCENARIOS = prop.getProperty("simulation_scenarios").split(",");
 			
+			try{
+				RANDOM_SEED = Integer.parseInt(prop.getProperty("random_seed"));
+			}catch (Exception e) {
+				Random r = new Random();
+				RANDOM_SEED = r.nextInt();// TODO: handle exception
+			}
+			
 			//avg waiting time in a place (min)
 			double place1_mean_waiting_time = Double.parseDouble(prop.getProperty("attractiveness_L1_mean_waiting_time"));
 			double place2_mean_waiting_time = Double.parseDouble(prop.getProperty("attractiveness_L2_mean_waiting_time"));
@@ -242,7 +255,7 @@ public class SimSettings {
 				}
 			}
 		}
-		parseApplicatinosXML(applicationsFile);
+		parseApplicationsXML(applicationsFile);
 		parseEdgeDevicesXML(edgeDevicesFile);
 		parseLinksXML(linksFile);
 		
@@ -416,6 +429,14 @@ public class SimSettings {
 	{
 		return MAX_NUM_OF_MOBILE_DEVICES;
 	}
+	
+	/**
+	 * 
+	 * @return Should low level fog nodes be mobile?
+	 */
+	public boolean getMovingDevices() {
+		return MOVING_DEVICES;
+	}
 
 	
 	/**
@@ -547,7 +568,7 @@ public class SimSettings {
 	 * 
 	 * @param filePath
 	 */
-	private void parseApplicatinosXML(String filePath)
+	private void parseApplicationsXML(String filePath)
 	{
 		Document doc = null;
 		try {	
@@ -704,6 +725,15 @@ public class SimSettings {
 		}		
 	}
 
+	/**
+	 * Increments random_seed to avoid multiple distributions with the same rng.
+	 * @return Integer for seeding randoms.
+	 */
+	public int getRandomSeed() {
+		int val = RANDOM_SEED;
+		RANDOM_SEED++;
+		return val;
+	}
 	
 	/**
 	 * 
@@ -783,7 +813,7 @@ public class SimSettings {
 	 * Qian get trace enabled infomation 
 	 * @return
 	 */
-	public boolean traceEnalbe() {
+	public boolean traceEnable() {
 		return TRACE_ENABLED;
 	}
 
